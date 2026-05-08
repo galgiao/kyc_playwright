@@ -136,6 +136,7 @@ LOGIN_UI_HTML = """
     const toast = document.getElementById("toast");
     const meta = document.getElementById("meta");
     const text = document.getElementById("text");
+    let statusTimer = null;
 
     function note(message) {
       toast.textContent = message;
@@ -156,6 +157,10 @@ LOGIN_UI_HTML = """
       const response = await fetch("/auth/session/status");
       const payload = await response.json();
       meta.textContent = payload.active ? `${payload.title || ""} ${payload.url || ""}` : "未启动";
+      if (!payload.active && statusTimer) {
+        clearInterval(statusTimer);
+        statusTimer = null;
+      }
       return payload;
     }
 
@@ -215,6 +220,15 @@ LOGIN_UI_HTML = """
       try {
         const payload = await postJson("/auth/session/save");
         note(`已保存 ${payload.storage_state_path}`);
+        if (statusTimer) {
+          clearInterval(statusTimer);
+          statusTimer = null;
+        }
+        screen.removeAttribute("src");
+        screen.style.display = "none";
+        placeholder.style.display = "grid";
+        placeholder.textContent = "登录态已保存，可以关闭此页面。";
+        meta.textContent = "登录会话已结束";
       } catch (error) {
         note(error.message);
       }
@@ -233,7 +247,7 @@ LOGIN_UI_HTML = """
       }
     };
 
-    setInterval(() => {
+    statusTimer = setInterval(() => {
       if (screen.src) refreshStatus();
     }, 3000);
 

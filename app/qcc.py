@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from playwright.async_api import (
     BrowserContext,
     Page,
+    Error as PlaywrightError,
     TimeoutError as PlaywrightTimeoutError,
     async_playwright,
 )
@@ -48,14 +49,24 @@ class QccLoginSession:
     async def page(self) -> Page:
         if not self.context:
             raise HTTPException(status_code=409, detail="尚未启动登录会话，请先调用 /auth/session/start")
-        open_pages = [page for page in self.context.pages if not page.is_closed()]
-        return open_pages[-1] if open_pages else await self.context.new_page()
+        try:
+            open_pages = [page for page in self.context.pages if not page.is_closed()]
+            return open_pages[-1] if open_pages else await self.context.new_page()
+        except PlaywrightError as exc:
+            await self._mark_closed()
+            raise HTTPException(status_code=409, detail="登录浏览器会话已关闭，请重新启动") from exc
 
     async def status(self) -> dict[str, Any]:
         if not self.context:
             return {"active": False, "url": None, "title": None}
-        page = await self.page()
-        return {"active": True, "url": page.url, "title": await page.title()}
+        try:
+            page = await self.page()
+            return {"active": True, "url": page.url, "title": await page.title()}
+        except HTTPException:
+            return {"active": False, "url": None, "title": None}
+        except PlaywrightError:
+            await self._mark_closed()
+            return {"active": False, "url": None, "title": None}
 
     async def screenshot(self) -> bytes:
         async with self._lock:
@@ -94,10 +105,25 @@ class QccLoginSession:
 
     async def _close_unlocked(self) -> None:
         if self.context:
-            await self.context.close()
+            try:
+                await self.context.close()
+            except (PlaywrightError, RuntimeError):
+                pass
             self.context = None
         if self.playwright:
-            await self.playwright.stop()
+            try:
+                await self.playwright.stop()
+            except (PlaywrightError, RuntimeError):
+                pass
+            self.playwright = None
+
+    async def _mark_closed(self) -> None:
+        self.context = None
+        if self.playwright:
+            try:
+                await self.playwright.stop()
+            except (PlaywrightError, RuntimeError):
+                pass
             self.playwright = None
 
 
