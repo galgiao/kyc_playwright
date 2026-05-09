@@ -64,6 +64,73 @@ fc-match "Noto Sans CJK SC"
 
 If `google-noto-sans-cjk-fonts` is not available, use the CJK package name returned by `dnf search`, such as `google-noto-cjk-fonts` or `google-noto-sans-cjk-vf-fonts`.
 
+## Run as a Systemd Service
+
+Use `systemd` to keep the API running after SSH logout and restart it after server reboot.
+
+Create an environment file:
+
+```bash
+sudo tee /etc/kyc-playwright.env >/dev/null <<'EOF'
+APP_STORAGE_STATE_PATH=/home/ec2-user/kyc_playwright/data/qcc_storage_state.json
+APP_USER_DATA_DIR=/home/ec2-user/kyc_playwright/data/qcc_user_data
+APP_BROWSER_HEADLESS=true
+APP_NAVIGATION_TIMEOUT_MS=45000
+APP_EXTRACTION_TIMEOUT_MS=12000
+EOF
+```
+
+Create the service unit:
+
+```bash
+sudo tee /etc/systemd/system/kyc-playwright.service >/dev/null <<'EOF'
+[Unit]
+Description=Qichacha KYC Playwright API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/home/ec2-user/kyc_playwright
+EnvironmentFile=/etc/kyc-playwright.env
+ExecStart=/home/ec2-user/kyc_playwright/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+Start and enable it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now kyc-playwright
+sudo systemctl status kyc-playwright
+```
+
+View logs:
+
+```bash
+sudo journalctl -u kyc-playwright -f
+```
+
+Restart after code changes:
+
+```bash
+cd /home/ec2-user/kyc_playwright
+git pull
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m playwright install chromium
+sudo systemctl restart kyc-playwright
+```
+
+If the project path or Linux user is different, update `User`, `Group`, `WorkingDirectory`, `ExecStart`, and `/etc/kyc-playwright.env`.
+
 ## Login Cache Flow
 
 Option A, no-GUI Linux server:
