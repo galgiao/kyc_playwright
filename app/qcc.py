@@ -192,6 +192,43 @@ class QccScraper:
                 "raw_sections": raw_sections,
             }
 
+    async def fetch_company_food_safety(
+        self,
+        company_name: str,
+        headless: bool | None = None,
+    ) -> dict[str, Any]:
+        async with self._managed_context(headless=headless) as context:
+            page = await context.new_page()
+            search_url = f"{self.settings.qcc_search_url}?key={quote(company_name)}"
+            await self._goto(page, search_url)
+            await self._ensure_not_login_page(page)
+            await self._settle(page)
+
+            hit = await self._first_company_hit(page, company_name)
+            if not hit:
+                return {
+                    "query": company_name,
+                    "selected_company": None,
+                    "detail_url": None,
+                    "food_safety_info": {"items": [], "summary": "未找到企业搜索结果"},
+                    "raw_sections": {"search_page": await self._body_text(page)},
+                }
+
+            detail_page = await self._open_detail_page(context, page, hit.url)
+            await self._ensure_not_login_page(detail_page)
+            await self._settle(detail_page)
+
+            food_safety_info = await self._extract_food_safety_info(detail_page)
+            raw_sections = await self._extract_food_safety_raw_sections(detail_page)
+
+            return {
+                "query": company_name,
+                "selected_company": hit.model_dump(),
+                "detail_url": detail_page.url,
+                "food_safety_info": food_safety_info,
+                "raw_sections": raw_sections,
+            }
+
     async def _open_detail_page(
         self,
         context: BrowserContext,
@@ -291,6 +328,75 @@ class QccScraper:
             "text": text,
         }
 
+    async def _extract_food_safety_info(self, page: Page) -> dict[str, Any]:
+        labels = [
+            "食品安全",
+            "食品经营许可",
+            "食品生产许可",
+            "食品许可证",
+            "食品相关",
+            "抽查检查",
+            "监督检查",
+            "行政处罚",
+            "产品质量",
+        ]
+        await self._click_tab_if_present(page, labels)
+        text = await self._first_visible_text(
+            page,
+            [
+                "section:has-text('食品安全')",
+                "section:has-text('食品经营许可')",
+                "section:has-text('食品生产许可')",
+                "div:has-text('食品安全') table",
+                "div:has-text('食品经营许可') table",
+                "div:has-text('食品生产许可') table",
+                "table:has-text('食品经营许可证')",
+                "table:has-text('食品生产许可证')",
+                "section:has-text('抽查检查')",
+                "section:has-text('监督检查')",
+                "div:has-text('抽查检查') table",
+                "div:has-text('监督检查') table",
+                "section:has-text('行政处罚')",
+                "div:has-text('行政处罚') table",
+            ],
+        )
+        if not text:
+            body = await self._body_text(page)
+            snippets = {
+                label: self._slice_around(body, label)
+                for label in labels
+                if self._slice_around(body, label)
+            }
+            if not snippets:
+                return {"items": [], "summary": "未找到食品安全相关区块", "snippets": {}}
+            text = "\n".join(snippets.values())
+
+        rows = self._parse_rows(text, ignored_headers=set(labels))
+        fields = self._parse_label_values(
+            text,
+            labels=[
+                "许可证编号",
+                "食品经营许可证",
+                "食品生产许可证",
+                "许可编号",
+                "许可机关",
+                "发证机关",
+                "有效期至",
+                "有效期限",
+                "许可内容",
+                "检查结果",
+                "检查机关",
+                "处罚决定书文号",
+                "处罚机关",
+            ],
+        )
+        return {
+            "items": rows,
+            "fields": fields,
+            "summary": f"解析到 {len(rows)} 行食品安全相关文本",
+            "text": text,
+        }
+
     async def _extract_raw_sections(self, page: Page) -> dict[str, str]:
         body = await self._body_text(page)
         return {
@@ -298,6 +404,19 @@ class QccScraper:
             "工商信息": self._slice_around(body, "工商信息"),
             "资质信息": self._slice_around(body, "资质"),
             "行政许可": self._slice_around(body, "行政许可"),
+        }
+
+    async def _extract_food_safety_raw_sections(self, page: Page) -> dict[str, str]:
+        body = await self._body_text(page)
+        return {
+            "title": await page.title(),
+            "食品安全": self._slice_around(body, "食品安全"),
+            "食品经营许可": self._slice_around(body, "食品经营许可"),
+            "食品生产许可": self._slice_around(body, "食品生产许可"),
+            "抽查检查": self._slice_around(body, "抽查检查"),
+            "监督检查": self._slice_around(body, "监督检查"),
+            "行政处罚": self._slice_around(body, "行政处罚"),
+            "产品质量": self._slice_around(body, "产品质量"),
         }
 
     async def _click_tab_if_present(self, page: Page, labels: list[str]) -> None:
@@ -404,12 +523,13 @@ class QccScraper:
                     result[label] = value
         return result
 
-    def _parse_rows(self, text: str) -> list[dict[str, str]]:
+    def _parse_rows(self, text: str, ignored_headers: set[str] | None = None) -> list[dict[str, str]]:
+        ignored = ignored_headers or {"资质", "行政许可", "证书"}
         lines = [line for line in text.splitlines() if line.strip()]
         rows: list[dict[str, str]] = []
         for line in lines:
             normalized = self._normalize(line)
-            if normalized and normalized not in {"资质", "行政许可", "证书"}:
+            if normalized and normalized not in ignored:
                 rows.append({"text": normalized})
         return rows
 

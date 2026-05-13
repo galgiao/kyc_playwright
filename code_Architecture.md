@@ -1,6 +1,6 @@
 # Project Positioning and Runtime Shape
 
-FastAPI service for Qichacha KYC scraping. Runtime loads a Playwright login `storage_state` file, searches Qichacha, opens the selected company detail page, and extracts basic company fields plus qualification or licensing text. Login initialization works on no-GUI Linux servers through a FastAPI web page that remotely controls a headless Playwright browser.
+FastAPI service for Qichacha KYC scraping. Runtime loads a Playwright login `storage_state` file, searches Qichacha, opens the selected company detail page, and extracts basic company fields, qualification or licensing text, and food safety related sections. Login initialization works on no-GUI Linux servers through a FastAPI web page that remotely controls a headless Playwright browser.
 
 # Directory Responsibilities
 
@@ -27,6 +27,7 @@ FastAPI service for Qichacha KYC scraping. Runtime loads a Playwright login `sto
 - Login cache save: `POST /auth/cache`.
 - Login status check: `GET /auth/status`.
 - Company KYC scrape: `POST /companies/kyc`.
+- Company food safety scrape: `POST /companies/food-safety`.
 
 # Feature to Code Control Map
 
@@ -34,8 +35,10 @@ FastAPI service for Qichacha KYC scraping. Runtime loads a Playwright login `sto
 - Server-side manual login is controlled by login session routes in `app/main.py`, the HTML in `app/login_ui.py`, and `QccLoginSession` in `app/qcc.py`.
 - Login status validation is controlled by `login_status()` in `app/main.py` and `QccScraper.check_login()` in `app/qcc.py`.
 - Company search and detail scraping are controlled by `company_kyc()` in `app/main.py` and `QccScraper.fetch_company_kyc()` in `app/qcc.py`.
+- Food safety search and detail scraping are controlled by `company_food_safety()` in `app/main.py` and `QccScraper.fetch_company_food_safety()` in `app/qcc.py`.
 - Basic information parsing lives in `QccScraper._extract_basic_info()` and `_parse_label_values()`.
 - Qualification information parsing lives in `QccScraper._extract_qualification_info()` and `_parse_rows()`.
+- Food safety parsing lives in `QccScraper._extract_food_safety_info()` and `_extract_food_safety_raw_sections()`.
 
 # Config and Env Locations
 

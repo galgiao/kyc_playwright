@@ -217,6 +217,51 @@ Example response shape:
 }
 ```
 
+## Scrape Food Safety Information
+
+```bash
+curl -X POST http://SERVER:8000/companies/food-safety \
+  -H 'Content-Type: application/json' \
+  -d '{"company_name":"广大集团"}'
+```
+
+The response focuses on Qichacha detail-page sections related to food safety, food business or production licenses, inspections, product quality, and administrative penalties.
+
+Example response shape:
+
+```json
+{
+  "query": "广大集团",
+  "selected_company": {
+    "name": "匹配到的企业名称",
+    "url": "企查查详情页URL",
+    "match_text": "搜索结果文本"
+  },
+  "detail_url": "实际打开的详情页URL",
+  "food_safety_info": {
+    "items": [{"text": "食品安全/许可/检查/处罚相关行文本"}],
+    "fields": {
+      "许可证编号": "...",
+      "许可机关": "...",
+      "有效期至": "...",
+      "检查结果": "..."
+    },
+    "summary": "解析到 N 行食品安全相关文本",
+    "text": "原始食品安全相关区块文本"
+  },
+  "raw_sections": {
+    "title": "...",
+    "食品安全": "...",
+    "食品经营许可": "...",
+    "食品生产许可": "...",
+    "抽查检查": "...",
+    "监督检查": "...",
+    "行政处罚": "...",
+    "产品质量": "..."
+  }
+}
+```
+
 ## Environment
 
 Settings are controlled by `APP_` variables or `.env`.

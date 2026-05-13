@@ -5,6 +5,7 @@ from app.login_ui import LOGIN_UI_HTML
 from app.config import get_settings
 from app.qcc import QccLoginSession, QccScraper
 from app.schemas import (
+    CompanyFoodSafetyResponse,
     CompanyKycResponse,
     CompanySearchRequest,
     LoginClickRequest,
@@ -151,3 +152,12 @@ async def company_kyc(payload: CompanySearchRequest) -> CompanyKycResponse:
         headless=payload.headless,
     )
     return CompanyKycResponse(**result)
+
+
+@app.post("/companies/food-safety", response_model=CompanyFoodSafetyResponse)
+async def company_food_safety(payload: CompanySearchRequest) -> CompanyFoodSafetyResponse:
+    result = await QccScraper(get_settings()).fetch_company_food_safety(
+        payload.company_name.strip(),
+        headless=payload.headless,
+    )
+    return CompanyFoodSafetyResponse(**result)

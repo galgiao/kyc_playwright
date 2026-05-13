@@ -69,3 +69,11 @@ class CompanyKycResponse(BaseModel):
     basic_info: dict[str, str]
     qualification_info: dict[str, Any]
     raw_sections: dict[str, str]
+
+
+class CompanyFoodSafetyResponse(BaseModel):
+    query: str
+    selected_company: CompanySearchHit | None
+    detail_url: str | None
+    food_safety_info: dict[str, Any]
+    raw_sections: dict[str, str]
